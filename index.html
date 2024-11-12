@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מוקדנות טלפונית</title>
+
+    <!-- קישור לקובץ ה-Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --secondary-color: #f5f5f5;
+            --border-color: #ddd;
+            --bg-color: #ffffff;
+        }
+
+        body { 
+            font-family: Arial, sans-serif; 
+            direction: rtl; 
+            text-align: right;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: var(--secondary-color);
+            color: #333;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .stats {
+            background: var(--bg-color);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .button-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+
+        .button-container button,
+        .button-container input[type="file"] {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-size: 16px;
+        }
+
+        .button-container button:hover {
+            background-color: #218838;
+        }
+
+        .input-container {
+            background: var(--bg-color);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .input-container input,
+        .input-container textarea,
+        .input-container select {
+            width: 100%;
+            padding: 8px;
+            margin: 8px 0;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        #searchInput {
+            padding: 10px;
+            font-size: 16px;
+        }
+
+        .contact {
+            background: var(--bg-color);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .contact:hover {
+            transform: translateX(-5px);
+        }
+
+        .contact-info {
+            display: flex;
+            flex-direction: column;
+            margin: 10px 0;
+        }
+
+        .contact-name {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 5px;
+            color: var(--primary-color);
+        }
+
+        .color-box {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid var(--border-color);
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        /* עדכון הסגנונות לכפתורים בכרטיס הלקוח */
+        .contact button {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            margin: 5px; /* הוספת מרווח */
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-size: 16px;
+        }
+
+        .contact button:hover {
+            background-color: #357abd;
+        }
+
+        .details {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: var(--secondary-color);
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .priority {
+            background-color: #fff3e0;
+        }
+
+        .today-followup {
+            border-right: 4px solid #4caf50;
+        }
+    </style>
+</head>
+<body>
+    <h1>ניהול קשרי לקוחות</h1>
+
+    <div class="stats">
+        <span>סה"כ לקוחות: <span id="totalContacts">0</span></span>
+        <span>לקוחות להיום: <span id="todayFollowups">0</span></span>
+    </div>
+
+    <div class="button-container">
+        <button onclick="exportToExcel()">ייצא נתונים לאקסל</button>
+        <input type="file" id="csvFileInput" accept=".csv" style="display:none" onchange="importCSV()">
+        <button onclick="document.getElementById('csvFileInput').click()">ייבא לקוחות מקובץ CSV</button>
+    </div>
+
+    <div class="input-container">
+        <input type="text" id="searchInput" placeholder="חיפוש לקוחות...">
+        <input type="text" id="nameInput" placeholder="שם הלקוח">
+        <textarea id="detailsInput" placeholder="מה קרה בשיחה"></textarea>
+        <input type="datetime-local" id="followUpDateInput">
+        <select id="categoryInput">
+            <option value="">בחר קטגוריה</option>
+            <option value="לקוח שהיה במיזם ועזב">לקוח שהיה במיזם ועזב</option>
+            <option value="לקוח מתעניין">לקוח מתעניין</option>
+            <option value="לקוח בתהליכי שימור">לקוח בתהליכי שימור</option>
+        </select>
+        <button id="addContact" onclick="addOrUpdateContact()">הוסף לקוח</button>
+    </div>
+
+    <div id="contactList"></div>
+
+    <script>
+        let contacts = JSON.parse(localStorage.getItem('contacts') || '[]');
+
+        function saveContacts() {
+            localStorage.setItem('contacts', JSON.stringify(contacts));
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            return date.toLocaleString('he-IL', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function importCSV() {
+            const fileInput = document.getElementById('csvFileInput');
+            const file = fileInput.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const text = event.target.result;
+                const rows = text.split('\n');
+                rows.forEach((row, index) => {
+                    if (index === 0) return;
+                    const columns = row.split(',');
+                    const name = columns[0].trim();
+                    const phone = columns[1]?.trim();
+                    const category = columns[2]?.trim();
+                    if (name && phone) {
+                        const newContact = { 
+                            id: Date.now() + index,
+                            name, 
+                            details: phone,
+                            category: category || "",
+                            followUps: 0,
+                            color: '',
+                            priority: false,
+                            followUpDate: '',
+                            createdAt: new Date().toISOString()
+                        };
+                        contacts.push(newContact);
+                    }
+                });
+                saveContacts();
+                renderContacts();
+                alert("ייבוא הושלם!");
+            };
+            reader.readAsText(file);
+        }
+
+        function renderContacts() {
+            const today = new Date().toISOString().split('T')[0];
+            const filteredContacts = filterContacts();
+            const sortedContacts = filteredContacts.sort((a, b) => {
+                if (a.followUpDate && b.followUpDate) {
+                    if (a.followUpDate.startsWith(today) && !b.followUpDate.startsWith(today)) return -1;
+                    if (!a.followUpDate.startsWith(today) && b.followUpDate.startsWith(today)) return 1;
+                }
+                if (a.priority !== b.priority) return b.priority - a.priority;
+                return b.followUps - a.followUps;
+            });
+
+            const list = document.getElementById("contactList");
+            list.innerHTML = "";
+            
+            sortedContacts.forEach(contact => {
+                const contactElem = document.createElement("div");
+                contactElem.className = `contact ${contact.priority ? 'priority' : ''} ${contact.followUpDate?.startsWith(today) ? 'today-followup' : ''}`;
+                
+                const infoContainer = document.createElement("div");
+                infoContainer.className = "contact-info";
+                
+                const nameElem = document.createElement("span");
+                nameElem.className = "contact-name";
+                nameElem.textContent = contact.name;
+                
+                const categoryElem = document.createElement("span");
+                categoryElem.textContent = `קטגוריה: ${contact.category || "ללא קטגוריה"}`;
+
+                const followUpElem = document.createElement("span");
+                followUpElem.textContent = `פולו אפים: ${contact.followUps}`;
+                
+                const followUpDateElem = document.createElement("span");
+                if (contact.followUpDate) {
+                    followUpDateElem.textContent = `חזרה מתוזמנת: ${formatDate(contact.followUpDate)}`;
+                }
+
+                infoContainer.append(createColorBox(contact), nameElem, categoryElem, followUpElem, followUpDateElem);
+                
+                const buttonsContainer = document.createElement("div");
+                buttonsContainer.style.marginTop = "10px";
+
+                // הוספת מחלקה למיכל הכפתורים אם תרצה
+                // buttonsContainer.className = "buttons-container";
+
+                const addButton = createButton("+", () => updateFollowUps(contact, 1));
+                const minusButton = createButton("-", () => updateFollowUps(contact, -1));
+                const priorityButton = createButton(contact.priority ? "בטל תעדוף" : "תעדוף", () => togglePriority(contact));
+                const detailsButton = createButton("פרטים", () => toggleDetails(contactElem));
+                const deleteButton = createButton("מחק", () => deleteContact(contact.id));
+                const editButton = createButton("ערוך", () => editContact(contact));
+
+                buttonsContainer.append(addButton, minusButton, priorityButton, detailsButton, deleteButton, editButton);
+
+                const detailsDiv = createDetailsDiv(contact);
+
+                contactElem.append(infoContainer, buttonsContainer, detailsDiv);
+                list.appendChild(contactElem);
+            });
+            
+            updateStats();
+        }
+
+        function createButton(text, onClick) {
+            const button = document.createElement("button");
+            button.textContent = text;
+            button.onclick = onClick;
+            return button;
+        }
+
+        function createColorBox(contact) {
+            const colorBox = document.createElement("div");
+            colorBox.className = "color-box";
+            colorBox.style.backgroundColor = contact.color;
+            colorBox.onclick = () => changeColor(contact);
+            return colorBox;
+        }
+
+        function createDetailsDiv(contact) {
+            const detailsDiv = document.createElement("div");
+            detailsDiv.className = "details";
+            detailsDiv.textContent = contact.details;
+            return detailsDiv;
+        }
+
+        function updateFollowUps(contact, change) {
+            contact.followUps = Math.max(0, contact.followUps + change);
+            saveContacts();
+            renderContacts();
+        }
+
+        function togglePriority(contact) {
+            contact.priority = !contact.priority;
+            saveContacts();
+            renderContacts();
+        }
+
+        function toggleDetails(contactElem) {
+            const detailsDiv = contactElem.querySelector('.details');
+            detailsDiv.style.display = detailsDiv.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function changeColor(contact) {
+            const color = prompt("הכנס צבע (כתום, כחול, אדום):");
+            const colorMap = {
+                'כתום': 'orange',
+                'כחול': 'blue',
+                'אדום': 'red'
+            };
+            
+            if (colorMap[color]) {
+                contact.color = colorMap[color];
+                saveContacts();
+                renderContacts();
+            }
+        }
+
+        function deleteContact(id) {
+            if (confirm('האם אתה בטוח שברצונך למחוק לקוח זה?')) {
+                contacts = contacts.filter(contact => contact.id !== id);
+                saveContacts();
+                renderContacts();
+            }
+        }
+
+        function exportToExcel() {
+            const today = new Date().toLocaleDateString('he-IL');
+            
+            const headers = [
+                'שם הלקוח',
+                'פרטי שיחה',
+                'קטגוריה',
+                'מספר פולו-אפים',
+                'תאריך חזרה',
+                'צבע סימון',
+                'עדיפות גבוהה',
+                'תאריך יצירה'
+            ];
+
+            const rows = contacts.map(contact => [
+                contact.name,
+                contact.details.replace(/,/g, ';'),
+                contact.category || "ללא קטגוריה",
+                contact.followUps,
+                contact.followUpDate ? formatDate(contact.followUpDate) : '',
+                contact.color || '',
+                contact.priority ? 'כן' : 'לא',
+                formatDate(contact.createdAt)
+            ]);
+
+            const csvContent = [
+                headers.join(','),
+                ...rows.map(row => row.join(','))
+            ].join('\n');
+
+            const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
+            
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `רשימת_לקוחות_${today}.csv`;
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function editContact(contact) {
+            document.getElementById("nameInput").value = contact.name;
+            document.getElementById("detailsInput").value = contact.details;
+            document.getElementById("followUpDateInput").value = contact.followUpDate;
+            document.getElementById("categoryInput").value = contact.category || "";
+
+            document.getElementById("addContact").dataset.editId = contact.id;
+            document.getElementById("addContact").textContent = "שמור שינויים";
+        }
+
+        function addOrUpdateContact() {
+            const editId = document.getElementById("addContact").dataset.editId;
+            const name = document.getElementById("nameInput").value.trim();
+            const details = document.getElementById("detailsInput").value.trim();
+            const followUpDate = document.getElementById("followUpDateInput").value;
+            const category = document.getElementById("categoryInput").value;
+
+            if (!name) {
+                alert("הכנס שם!");
+                return;
+            }
+
+            if (editId) {
+                const contact = contacts.find(c => c.id == editId);
+                contact.name = name;
+                contact.details = details;
+                contact.followUpDate = followUpDate;
+                contact.category = category;
+
+                document.getElementById("addContact").textContent = "הוסף לקוח";
+                delete document.getElementById("addContact").dataset.editId;
+            } else {
+                const newContact = { 
+                    id: Date.now(),
+                    name,
+                    details,
+                    followUps: 0,
+                    color: '',
+                    priority: false,
+                    followUpDate,
+                    category,
+                    createdAt: new Date().toISOString()
+                };
+                contacts.unshift(newContact);
+            }
+
+            saveContacts();
+            clearInputs();
+            renderContacts();
+        }
+
+        function clearInputs() {
+            document.getElementById("nameInput").value = "";
+            document.getElementById("detailsInput").value = "";
+            document.getElementById("followUpDateInput").value = "";
+            document.getElementById("categoryInput").value = "";
+        }
+
+        function filterContacts() {
+            const searchTerm = document.getElementById("searchInput").value.toLowerCase();
+            return contacts.filter(contact => 
+                contact.name.toLowerCase().includes(searchTerm) || 
+                contact.details.toLowerCase().includes(searchTerm) || 
+                contact.category?.toLowerCase().includes(searchTerm)
+            );
+        }
+
+        function updateStats() {
+            const today = new Date().toISOString().split('T')[0];
+            const todayFollowups = contacts.filter(contact => contact.followUpDate?.startsWith(today)).length;
+            
+            document.getElementById('totalContacts').textContent = contacts.length;
+            document.getElementById('todayFollowups').textContent = todayFollowups;
+        }
+
+        document.getElementById("searchInput").addEventListener("input", renderContacts);
+        renderContacts();
+    </script>
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/service-worker.js')
+        .then(() => console.log('Service Worker registered'))
+        .catch(error => console.error('Service Worker registration failed:', error));
+      }
+    </script>
+</body>
+</html>
